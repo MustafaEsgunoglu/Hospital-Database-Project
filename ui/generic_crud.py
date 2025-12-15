@@ -5,7 +5,7 @@ from typing import Any, Callable, Optional
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
     QMessageBox, QDialog, QFormLayout, QLineEdit, QSpinBox, QDoubleSpinBox,
-    QComboBox
+    QComboBox, QCheckBox
 )
 from PyQt6.QtCore import Qt
 from sqlalchemy import text
@@ -17,7 +17,7 @@ engine = get_engine()
 class FieldSpec:
     name: str
     label: str
-    kind: str = "text"  # "text" | "int" | "decimal" | "fk"
+    kind: str = "text"  # "text" | "int" | "decimal" | "fk" | "bool"
     required: bool = True
     fk_loader: Optional[Callable[[], list[dict]]] = None   # returns rows with id/name keys
     fk_id_key: str = "id"
@@ -62,6 +62,12 @@ class EditDialog(QDialog):
                     idx = w.findData(int(cur))
                     if idx >= 0:
                         w.setCurrentIndex(idx)
+            elif f.kind == "bool":
+                w = QCheckBox()
+                raw = self.initial.get(f.name, 0)
+                # raw: 1/0, True/False, "true"/"false" gelebilir
+                val = str(raw).strip().lower()
+                w.setChecked(val in ("1", "true", "yes"))
             else:
                 w = QLineEdit()
 
@@ -108,6 +114,8 @@ class EditDialog(QDialog):
                 out[f.name] = float(w.value())
             elif f.kind == "fk":
                 out[f.name] = w.currentData()
+            elif f.kind == "bool":
+                out[f.name] = 1 if w.isChecked() else 0
             else:
                 out[f.name] = None
         return out

@@ -234,6 +234,16 @@ class AdminWindow(QMainWindow):
         q = text("SELECT ServiceCategoryId AS id, CategoryName AS name FROM ServiceCategory ORDER BY ServiceCategoryId")
         with engine.connect() as conn:
             return list(conn.execute(q).mappings().all())
+        
+    def load_roomtypes_fk(self):
+        q = text("SELECT RoomTypeId AS id, TypeName AS name FROM RoomType ORDER BY RoomTypeId")
+        with engine.connect() as conn:
+            return list(conn.execute(q).mappings().all())
+
+    def load_hospitals_fk(self):
+        q = text("SELECT HospitalId AS id, HospitalName AS name FROM Hospital ORDER BY HospitalId")
+        with engine.connect() as conn:
+            return list(conn.execute(q).mappings().all())
 
 
     # ================= USERS TAB =================
@@ -781,6 +791,26 @@ class AdminWindow(QMainWindow):
                 "PaymentType"
             ),
             "PaymentType"
+        )
+
+        # Rooms
+        room_fields = [
+            FieldSpec("RoomNumber", "RoomNumber", "text", True),
+            FieldSpec("RoomTypeId", "RoomType", "fk", True, fk_loader=self.load_roomtypes_fk),
+            FieldSpec("HospitalId", "Hospital", "fk", True, fk_loader=self.load_hospitals_fk),
+            FieldSpec("Floor", "Floor", "text", True),
+            FieldSpec("IsActive", "IsActive", "bool", True),
+            FieldSpec("DepartmentId", "Department", "fk", True, fk_loader=self.load_departments_fk),
+        ]
+
+        tabs.addTab(
+            GenericCrudWidget(
+                "Room", "RoomId",
+                ["RoomId", "RoomNumber", "RoomTypeId", "HospitalId", "Floor", "IsActive", "DepartmentId"],
+                room_fields,
+                "Room"
+            ),
+            "Room"
         )
 
         layout.addWidget(tabs)
