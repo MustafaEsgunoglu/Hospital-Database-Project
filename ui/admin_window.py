@@ -257,8 +257,8 @@ class AdminWindow(QMainWindow):
         for b in [self.btn_u_refresh, self.btn_u_add, self.btn_u_edit, self.btn_u_toggle, self.btn_u_delete]:
             btns.addWidget(b)
         btns.addStretch(1)
-        видно = QLabel("Not: 'Toggle Active' önerilen. Hard delete FK yüzünden hata verebilir.")
-        btns.addWidget(видно)
+        note_lbl = QLabel("Not: 'Toggle Active' önerilen. Hard delete FK yüzünden hata verebilir.")
+        btns.addWidget(note_lbl)
 
         layout.addLayout(btns)
 
