@@ -66,7 +66,28 @@ class PatientDialog(QDialog):
         self.phone.setText(self.initial.get("Phone", ""))
         self.email.setText(self.initial.get("Email", ""))
         self.address.setText(self.initial.get("Address", ""))
+
+        # BirthDate: 'YYYY-MM-DD' veya 'YYYY-MM-DD ...' gibi gelebilir
+        bd = self.initial.get("BirthDate")
+        if bd:
+            s = str(bd)[:10]  # sadece YYYY-MM-DD
+            parts = s.split("-")
+            if len(parts) == 3:
+                try:
+                    y, m, d = map(int, parts)
+                    self.birth.setDate(QDate(y, m, d))
+                except Exception:
+                    pass
+
+        # Gender
+        g = self.initial.get("Gender")
+        if g:
+            idx = self.gender.findText(str(g))
+            if idx >= 0:
+                self.gender.setCurrentIndex(idx)
+
         self.chk_active.setChecked(bool(self.initial.get("IsActive", True)))
+
 
     def _validate(self):
         if not self.first.text().strip() or not self.last.text().strip():

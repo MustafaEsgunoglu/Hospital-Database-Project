@@ -70,8 +70,11 @@ class ReceptionistWindow(QMainWindow):
         btns.addStretch(1)
         layout.addLayout(btns)
 
-        self.tbl_patients = QTableWidget(0, 6)
-        self.tbl_patients.setHorizontalHeaderLabels(["PatientId", "FirstName", "LastName", "Phone", "Email", "IsActive"])
+        self.tbl_patients = QTableWidget(0, 10)
+        self.tbl_patients.setHorizontalHeaderLabels([
+            "PatientId", "FirstName", "LastName", "TCNo", "BirthDate", "Gender",
+            "Phone", "Email", "Address", "IsActive"
+        ])
         self.tbl_patients.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tbl_patients.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tbl_patients.verticalHeader().setVisible(False)
@@ -82,7 +85,9 @@ class ReceptionistWindow(QMainWindow):
 
     def refresh_patients(self):
         q = text("""
-            SELECT PatientId, FirstName, LastName, TCNo, BirthDate, Gender, Phone, Email, Address, IsActive
+            SELECT PatientId, FirstName, LastName, TCNo,
+                CAST(BirthDate AS date) AS BirthDate,
+                Gender, Phone, Email, Address, IsActive
             FROM Patient
             ORDER BY PatientId
         """)
@@ -93,31 +98,44 @@ class ReceptionistWindow(QMainWindow):
         for r in rows:
             i = self.tbl_patients.rowCount()
             self.tbl_patients.insertRow(i)
+
             self._put(self.tbl_patients, i, 0, r["PatientId"], True)
             self._put(self.tbl_patients, i, 1, r["FirstName"])
             self._put(self.tbl_patients, i, 2, r["LastName"])
-            self._put(self.tbl_patients, i, 3, r.get("Phone"))
-            self._put(self.tbl_patients, i, 4, r.get("Email"))
-            self._put(self.tbl_patients, i, 5, 1 if r["IsActive"] else 0, True)
+            self._put(self.tbl_patients, i, 3, r["TCNo"])
+            self._put(self.tbl_patients, i, 4, "" if r["BirthDate"] is None else str(r["BirthDate"]))
+            self._put(self.tbl_patients, i, 5, r["Gender"])
+            self._put(self.tbl_patients, i, 6, r.get("Phone"))
+            self._put(self.tbl_patients, i, 7, r.get("Email"))
+            self._put(self.tbl_patients, i, 8, r.get("Address"))
+            self._put(self.tbl_patients, i, 9, 1 if r["IsActive"] else 0, True)
 
         self.tbl_patients.resizeColumnsToContents()
+
 
     def _selected_patient(self):
         items = self.tbl_patients.selectedItems()
         if not items:
             return None
         row = items[0].row()
-        def get(c): 
+
+        def get(c):
             it = self.tbl_patients.item(row, c)
             return it.text() if it else ""
+
         return {
             "PatientId": int(get(0)),
             "FirstName": get(1),
             "LastName": get(2),
-            "Phone": get(3),
-            "Email": get(4),
-            "IsActive": (get(5).strip().lower() in ("1", "true", "yes")),
+            "TCNo": get(3),
+            "BirthDate": get(4),   # string olarak
+            "Gender": get(5),
+            "Phone": get(6),
+            "Email": get(7),
+            "Address": get(8),
+            "IsActive": (get(9).strip().lower() in ("1", "true", "yes")),
         }
+
 
     def add_patient(self):
         dlg = PatientDialog(parent=self)
@@ -150,6 +168,7 @@ class ReceptionistWindow(QMainWindow):
         self.refresh_patients()
 
 
+
     def edit_patient(self):
         selected = self._selected_patient()
         if not selected:
@@ -163,22 +182,31 @@ class ReceptionistWindow(QMainWindow):
 
         q = text("""
             UPDATE Patient
-            SET FirstName=:fn, LastName=:ln, Phone=:ph, Email=:em, IsActive=:act
+            SET FirstName=:fn, LastName=:ln, TCNo=:tc, BirthDate=:bd, Gender=:g,
+                Phone=:ph, Email=:em, Address=:ad, IsActive=:act
             WHERE PatientId=:id
         """)
         try:
             with engine.begin() as conn:
                 conn.execute(q, {
                     "id": selected["PatientId"],
-                    "fn": data["FirstName"], "ln": data["LastName"],
-                    "ph": data["Phone"], "em": data["Email"],
-                    "act": data["IsActive"]
+                    "fn": data["FirstName"],
+                    "ln": data["LastName"],
+                    "tc": data["TCNo"],
+                    "bd": data["BirthDate"],
+                    "g": data["Gender"],
+                    "ph": data["Phone"],
+                    "em": data["Email"],
+                    "ad": data["Address"],
+                    "act": data["IsActive"],
                 })
         except Exception as e:
             QMessageBox.critical(self, "DB Error", f"Update failed:\n{e}")
             return
 
         self.refresh_patients()
+
+
 
     def toggle_patient_active(self):
         selected = self._selected_patient()
