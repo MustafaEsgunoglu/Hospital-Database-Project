@@ -20,11 +20,14 @@ class UserDialog(QDialog):
         self.patient_list = patient_list
         self.initial = initial or {}
 
+        # roleId -> roleName map
+        self.role_map = {int(r["RoleId"]): str(r["RoleName"]) for r in roles if r.get("RoleId") is not None}
+
         self.setWindowTitle("Add User" if mode == "add" else "Edit User")
         self.setMinimumWidth(420)
 
         layout = QVBoxLayout()
-        form = QFormLayout()
+        self.form = QFormLayout()
 
         self.txt_username = QLineEdit()
         self.txt_password = QLineEdit()
@@ -50,27 +53,73 @@ class UserDialog(QDialog):
 
         self.chk_active = QCheckBox("IsActive")
 
-        form.addRow("Username", self.txt_username)
-        form.addRow("Password", self.txt_password)  # edit modunda boş bırakılırsa değişmez
-        form.addRow("Role", self.cmb_role)
-        form.addRow("Staff", self.cmb_staff)
-        form.addRow("Patient", self.cmb_patient)
-        form.addRow("", self.chk_active)
+        self.form.addRow("Username", self.txt_username)
+        self.form.addRow("Password", self.txt_password)  # edit modunda boş bırakılırsa değişmez
+        self.form.addRow("Role", self.cmb_role)
+        self.form.addRow("Staff", self.cmb_staff)
+        self.form.addRow("Patient", self.cmb_patient)
+        self.form.addRow("", self.chk_active)
 
-        layout.addLayout(form)
+        layout.addLayout(self.form)
 
         btn_row = QHBoxLayout()
         self.btn_ok = QPushButton("Save")
         self.btn_cancel = QPushButton("Cancel")
         self.btn_ok.clicked.connect(self._validate)
         self.btn_cancel.clicked.connect(self.reject)
-
         btn_row.addWidget(self.btn_ok)
         btn_row.addWidget(self.btn_cancel)
         layout.addLayout(btn_row)
 
         self.setLayout(layout)
+
+        # role change -> apply rules
+        self.cmb_role.currentIndexChanged.connect(self._apply_role_rules)
+
         self._load_initial()
+        self._apply_role_rules()
+
+    def _role_name(self) -> str:
+        rid = self.cmb_role.currentData()
+        if rid is None:
+            return ""
+        return self.role_map.get(int(rid), "")
+
+    def _set_row_visible(self, widget, visible: bool):
+        widget.setVisible(visible)
+        lbl = self.form.labelForField(widget)
+        if lbl:
+            lbl.setVisible(visible)
+
+    def _apply_role_rules(self):
+        """
+        - If role == 'Patient' -> Patient required, Staff disabled
+        - Else -> Staff required, Patient disabled
+        - If no Patient role in DB -> Patient row hidden completely
+        """
+        role_name = self._role_name().lower().strip()
+
+        has_patient_role = any(str(r.get("RoleName", "")).lower() == "patient" for r in self.roles)
+
+        if not has_patient_role:
+            # Projede hasta login yok: tamamen gizle
+            self._set_row_visible(self.cmb_patient, False)
+            self.cmb_patient.setCurrentIndex(0)
+            self.cmb_patient.setEnabled(False)
+        else:
+            # hasta rolü varsa görünür kalsın, role'a göre enable/disable
+            self._set_row_visible(self.cmb_patient, True)
+
+        if role_name == "patient":
+            # Patient user
+            self.cmb_patient.setEnabled(True)
+            self.cmb_staff.setEnabled(False)
+            self.cmb_staff.setCurrentIndex(0)
+        else:
+            # Staff user (Admin/Doctor/Receptionist)
+            self.cmb_staff.setEnabled(True)
+            self.cmb_patient.setEnabled(False)
+            self.cmb_patient.setCurrentIndex(0)
 
     def _load_initial(self):
         if self.mode == "add":
@@ -107,21 +156,45 @@ class UserDialog(QDialog):
             QMessageBox.warning(self, "Error", "Password is required for new user.")
             return
 
+        role_name = self._role_name().lower().strip()
+
         staff_id = self.cmb_staff.currentData()
         patient_id = self.cmb_patient.currentData()
 
-        if staff_id is not None and patient_id is not None:
-            QMessageBox.warning(self, "Error", "Staff and Patient cannot both be selected.")
-            return
+        # Role-based required checks
+        if role_name == "patient":
+            if patient_id is None:
+                QMessageBox.warning(self, "Error", "Patient must be selected for Patient role.")
+                return
+            # force staff none
+            staff_id = None
+        else:
+            if staff_id is None:
+                QMessageBox.warning(self, "Error", "Staff must be selected for staff roles.")
+                return
+            # force patient none
+            patient_id = None
 
         self.accept()
 
     def get_data(self) -> dict:
+        role_id = int(self.cmb_role.currentData())
+        role_name = self.role_map.get(role_id, "").lower().strip()
+
+        staff_id = self.cmb_staff.currentData()
+        patient_id = self.cmb_patient.currentData()
+
+        # Force correct linkage
+        if role_name == "patient":
+            staff_id = None
+        else:
+            patient_id = None
+
         return {
             "Username": self.txt_username.text().strip(),
             "Password": self.txt_password.text(),  # edit modunda boş olabilir
-            "RoleId": int(self.cmb_role.currentData()),
-            "StaffId": self.cmb_staff.currentData(),
-            "PatientId": self.cmb_patient.currentData(),
+            "RoleId": role_id,
+            "StaffId": staff_id,
+            "PatientId": patient_id,
             "IsActive": 1 if self.chk_active.isChecked() else 0,
         }
